@@ -5,6 +5,7 @@ import { liveTerminals } from './terminals'
 import { copyText, copyTextInGesture } from '../clipboard'
 import { isBrowserCopy, isBrowserPaste } from './clipboardKeys'
 import { attachImeCommitFix } from './imeInput'
+import type { EchoAgent } from './localEcho'
 import { attachLocalEcho } from './localEchoLayer'
 import { rendererPreference } from './renderer'
 import { TerminalReplay } from './terminalReplay'
@@ -73,11 +74,11 @@ interface Props {
    */
   readOnly?: boolean
   /**
-   * Draw typed characters before the server echoes them. Only for a session
-   * running Claude Code on the normal screen; localEcho.ts says why not
-   * anywhere else.
+   * The agent in this session, to draw typed characters before the server
+   * echoes them; null for anything else. localEcho.ts says why only agents
+   * it knows.
    */
-  predictEcho?: boolean
+  predictEcho?: EchoAgent | null
   /** Keep this terminal mounted off-screen so switching back is instant. */
   hidden?: boolean
 }
@@ -124,7 +125,7 @@ export function TerminalView({
   onExit,
   className,
   readOnly = false,
-  predictEcho = false,
+  predictEcho = null,
   hidden = false,
   touchSelect = false,
   fullscreen = false,
