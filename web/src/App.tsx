@@ -69,6 +69,7 @@ import { copyTextInGesture } from './clipboard'
 import { notifyOnArchivedWaiting, notifyOnResourceAlert, notifyOnWaiting } from './notify'
 import { readSkipped, shouldNotice, writeSkipped } from './components/updateView'
 import { t, useLang } from './i18n'
+import { isClaudeCode } from './components/localEcho'
 
 /**
  * Safety net only.
@@ -1636,6 +1637,10 @@ export function App({ auth, onSignOut }: { auth: AuthState; onSignOut: () => voi
                   readOnly={narrow}
                   touchSelect={narrow || coarsePointer}
                   fullscreen={state.fullscreen.includes(id)}
+                  // Not excluded when full-screen: Claude Code draws on the
+                  // alternate screen now and is still exactly where its cursor
+                  // says. localEchoLayer checks the cursor is showing instead.
+                  predictEcho={isClaudeCode(state.sessions.find((x) => x.id === id))}
                   onSelectionChange={setSelection}
                   onClipboard={(text, ok) => setBlockedClip(ok ? '' : text)}
                   className="h-full w-full py-2 pr-1 pl-2"
