@@ -5,6 +5,8 @@ import { liveTerminals } from './terminals'
 import { copyText, copyTextInGesture } from '../clipboard'
 import { isBrowserCopy, isBrowserPaste } from './clipboardKeys'
 import { attachImeCommitFix } from './imeInput'
+import type { EchoAgent } from './localEcho'
+import { attachLocalEcho } from './localEchoLayer'
 import { rendererPreference } from './renderer'
 import { TerminalReplay } from './terminalReplay'
 import { LoadTimer, formatLoadBytes, loadPercents } from './terminalLoad'
@@ -71,6 +73,12 @@ interface Props {
    * cannot work against a raw terminal.
    */
   readOnly?: boolean
+  /**
+   * The agent in this session, to draw typed characters before the server
+   * echoes them; null for anything else. localEcho.ts says why only agents
+   * it knows.
+   */
+  predictEcho?: EchoAgent | null
   /** Keep this terminal mounted off-screen so switching back is instant. */
   hidden?: boolean
 }
@@ -117,6 +125,7 @@ export function TerminalView({
   onExit,
   className,
   readOnly = false,
+  predictEcho = null,
   hidden = false,
   touchSelect = false,
   fullscreen = false,
@@ -156,10 +165,15 @@ export function TerminalView({
   // resubscribes every mounted terminal, and a hidden one must not arrive as a
   // viewer claiming the grid.
   const hiddenRef = useRef(hidden)
+  // A ref for the same reason: the session's command is re-read every couple
+  // of seconds, and a program starting in the pane must not rebuild the
+  // terminal under it.
+  const predictEchoRef = useRef(predictEcho)
   useEffect(() => {
     onSelectionRef.current = onSelectionChange
     onClipboardRef.current = onClipboard
     hiddenRef.current = hidden
+    predictEchoRef.current = predictEcho
   })
 
   // Terminal lifetime is tied to the session, never to the theme or to
@@ -225,6 +239,10 @@ export function TerminalView({
     // listener has to sit on the host, not the textarea; imeInput.ts explains
     // the event order and why a fix there was not enough.
     const detachIme = attachImeCommitFix(host, term)
+
+    // Characters on screen at the speed of the keyboard rather than of the
+    // round trip. See localEcho.ts.
+    const echo = attachLocalEcho(term, () => predictEchoRef.current)
 
     // The renderer, which was never loaded.
     //
@@ -310,6 +328,20 @@ export function TerminalView({
     const encoder = new TextEncoder()
 
     let disposed = false
+    // Every load's state belongs to this run of the effect, not to the
+    // component. The refs outlive a re-run -- readOnly or touchSelect
+    // changing rebuilds the terminal and subscribes a new stream, whose first
+    // confirmation is not a reset -- so a finishedRef left true by the last
+    // terminal made finishLoad return at once for this one. With the cover
+    // that meant a terminal invisible and unclickable for good: narrowing a
+    // window to phone width and back was enough, and render-check found it by
+    // timing out on a click.
+    finishedRef.current = false
+    replayDoneRef.current = false
+    sizedRef.current = false
+    replayTotalRef.current = 0
+    replayReceivedRef.current = 0
+    replayParsedRef.current = 0
     // A resumed gap is appended below a screen that is already right, so it
     // is the one replay the cover stays down for.
     let resuming = false
@@ -397,6 +429,7 @@ export function TerminalView({
       const text = iosInputText(event as InputEvent)
       if (text === null) return
       if (replayQueue.replaying) return
+      echo.input(text)
       socket.writeText(sessionId, text)
       // Prevent xterm's own input listener from seeing the same character. The
       // keyup clears the flag after iOS finishes a space-to-punctuation pair.
@@ -411,6 +444,7 @@ export function TerminalView({
 
     const dataSub = term.onData((data) => {
       if (replayQueue.replaying) return
+      echo.input(data)
       socket.write(sessionId, encoder.encode(data))
     })
     // Binary input is what arrives for pasted bytes that are not valid UTF-16
@@ -433,6 +467,7 @@ export function TerminalView({
       // terminal that still had something worth reading in it.
       onReset: () => {
         replayQueue.restart()
+        echo.reset()
         resuming = false
         replayDoneRef.current = false
         finishedRef.current = false
@@ -576,11 +611,16 @@ export function TerminalView({
 
     return () => {
       disposed = true
+      // The next terminal starts uncovered and connecting, not in whatever
+      // state this one was left. See the reset at the top.
+      setCovering(false)
+      setLoadPhase('connecting')
       liveTerminals.delete(sessionId)
       host.removeEventListener('keydown', bypassIOSKeydown, true)
       host.removeEventListener('input', forwardIOSInput, true)
       host.removeEventListener('keyup', finishIOSInput, true)
       detachIme()
+      echo.dispose()
       detachTouch?.()
       host.removeEventListener('pointerup', copyOnSelect)
       selSub.dispose()

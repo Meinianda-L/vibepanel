@@ -24209,6 +24209,64 @@ merged. The overlay is a column now with the label in it. Two scale-check runs
 after were clean; neither is proof the timing was hit, and the fix is argued
 from the layout rather than from a reproduction.
 
+## 2026-09-27 — The monitor did not see what had left the pane
+
+Reported as "the monitor can't identify the CPU or the details of Claude
+Code's subshells". Asked of the running machine rather than of the code:
+this session's own cgroup held, beside `claude` and its current `bash -c`,
+three `sh -c sleep 30 & (while :; do :; done) & wait` at a core each -- one of
+them for 1 day 21 hours -- plus a `vite` and an `http.server`, all with ppid 1.
+The monitor showed none of it. It measured a session as the tree under its
+pane pid, and a process whose parent exits is handed to init (or to the
+nearest subreaper) and leaves that tree for good. `cmd &` from a shell that
+returns, `nohup`, a dev server an agent started and moved on from: exactly
+the processes somebody forgets.
+
+**Where the three spinners came from.** `internal/sysmon/proc_test.go`, the
+test for Top: it killed the `sh` it started, and the `( ... )` subshell is a
+process of its own, so every run of the package left one spinning for as long
+as the machine stayed up. Two of the three had working directories under
+deleted `/tmp/tmp.*` trees -- head-check's clean worktrees. The tests now start
+their shells in a process group of their own and kill the group. Checked by
+count: with the old cleanup put back one run leaves one more spinner, with the
+new none. The resources tests' pane helper had the same shape with a `sleep
+300`, and got the same fix.
+
+**Attribution.** After the panes' trees are walked, the processes nothing
+reached are asked for `VIBEPANEL_SESSION_ID` in their environment, which
+every pane is started with (`hooks.SessionEnv`) and which survives `&`, nohup
+and setsid. The root of each such subtree that names a running session is
+claimed for it, and marked detached. Each process's environment is read once
+in its life, keyed by pid and start time; on a steady machine that is the
+same few hundred daemons, cached as nobody's. An id that is not a running
+session claims nothing, which keeps a test harness's own panel out. The
+environment rather than the session's cgroup leaf, because the leaf exists
+only with isolation on, and this has to work without it; with isolation, the
+two agree.
+
+The session's CPU changed with it. It was the difference between two totals
+of the tree's ticks, which breaks as soon as membership moves: a detached
+process found for the first time brought its whole lifetime into one window,
+and any process exiting took its ticks out and read as the whole session
+doing nothing. It is now the sum of the processes' own shares, with a pid the
+previous sample never saw counted for all its ticks -- it was born in the
+window, and a build is mostly compilers that live for a second.
+
+**Naming.** A process was its comm, and every command an agent runs is called
+`bash` there. `top` now carries the command line, one line of at most 200
+characters, and Claude Code's wrapper (`bash -c "source <snapshot> ... && eval
+'<command>' && pwd -P >| <file>"`) is read back to the command inside the eval.
+The resources page's process list, where somebody decides which process to
+end, gets the same. The share surface restates its fields and carries none of
+this (red line 8).
+
+Verified end to end with a throwaway panel: a session that backgrounds a
+spinner and exits its launcher reads the spinner as `detached`, at 5.5% on
+this 18-core machine -- one core -- with `cmd` `sh -c (while :; do :; done) &`,
+and a Claude-Code-shaped wrapper reads as `sleep 120`. Mutations: no claiming,
+a newborn counted as zero, the command line replaced by the name (in sysmon
+and in resources) and the eval unwrap disabled each turn a test red.
+
 ## Two more agents, and one word that means two different things
 
 Hermes and pi joined the usage sources, appended to `usage.Tools` so no row on
@@ -24328,3 +24386,208 @@ This was first written against a queue with no end-of-snapshot signal, as an
 and a second definition of "the snapshot is done" that could disagree with the
 first is how a terminal ends up invisible with its bar saying 100%, so the
 cover is released from the same place the bar is.
+
+## 2026-09-27 — Merging #25 and #26, and a terminal that never came back
+
+Pull #25 adds Hermes and pi to the token counts: two new readers, the
+existing three untouched, so `ReaderVersion` did not need to move. Hermes'
+database is opened as opencode's is, read-only with `query_only`, and only its
+two usage tables are named. Pull #26 fixes the first full-width `！` from the
+macOS IME, and covers a terminal while its snapshot is parsed so history no
+longer scrolls past from the top. Its IME release cannot double a character on
+iPad: the iOS path stops the input event before xterm's handler sees it.
+
+`make verify` after the merge failed render-check with a click that timed out
+on the terminal, "the container intercepts pointer events" -- the cover's
+`pointer-events: none` still on, long after the load. Reproduced on demand:
+open a session, narrow the window to phone width, widen it again, and the
+terminal is at opacity 0 with the load bar up, indefinitely.
+
+The cause predates #26 and was harmless until the cover. `touchSelect` is a
+dependency of the effect that builds the terminal, so a layout change rebuilds
+it and subscribes a new stream. The load state -- finished, snapshot done,
+sized, the byte counts -- was in refs, which belong to the component and
+outlive the effect. The new stream's first confirmation is not a reset, so
+`finishedRef` was still true from the old terminal and `finishLoad` returned
+before doing anything. Under #23 that left a load bar up over a working
+terminal; under #26 it left the terminal invisible and unclickable. The effect
+now resets that state when it starts, and its cleanup takes the cover down.
+
+render-check now asks the question directly after its phone sections, rather
+than leaving it to a later click to time out on.
+
+## 2026-09-28 — Typing into Claude Code without waiting for the round trip
+
+「打字太卡了」, from an iPad on a panel in another place. Measured before
+anything was changed, with a real Claude Code in a panel on this machine and a
+TCP proxy in front of it holding every chunk for a fixed time each way, from
+the keydown to the first frame in which the character is on screen:
+
+```
+direct, no delay           median  40 ms   p95  50 ms
+300 ms round trip          median 332 ms   p95 340 ms
+```
+
+Forty milliseconds with no network at all is Claude Code redrawing its input
+box, tmux, and the panel; the rest is the round trip, paid on every character.
+
+### What it does now
+
+The character is drawn in the browser, at the cursor, in the same frame as the
+keydown, and the keystroke goes to the server exactly as before
+(`components/localEcho.ts`, drawn by `localEchoLayer.ts`). mosh and VS Code's
+terminal typeahead do this for every program by guessing; this does it for one
+program whose behaviour is known, which is what makes it small. Only Claude
+Code, because a local echo is a claim about what the program will draw, and a
+shell reading a password draws nothing.
+
+```
+                           panel's own work   on screen (median / worst)
+direct                     0.8 ms             6 / 15 ms
+300 ms round trip          1.1 ms             7 / 15 ms
+800 ms round trip          0.9 ms             6 / 15 ms
+300 ms, 25 keys a second   0.5 ms             9 / 15 ms
+```
+
+The worst case is one display refresh at 60 Hz and does not move with the
+network any more. The panel's own share -- keydown to the page changed -- is
+under 2.5 ms in every run.
+
+### What went wrong on the way, in the order it was found
+
+- **Claude Code is a full-screen program now.** It draws on the alternate
+  screen with mouse support, so the panel lists it in `fullscreen`, and the
+  first version, which excluded full-screen programs to stay out of vim's way,
+  excluded the one program it was for. Its cursor still sits exactly in the
+  input box (checked with `display -p '#{cursor_x},#{cursor_y}'` while typing,
+  wide characters included), so the check is the cursor, not the screen.
+- **Its process is not called `claude`.** The native install runs
+  `~/.local/share/claude/versions/2.1.283`, so tmux reports the pane's command
+  as `2.1.283`. `isClaudeCode` accepts a bare version number for that reason;
+  it is also the only way to recognise Claude Code started by hand in a shell.
+- **Buffer rows moved on every keystroke.** The panel keeps tmux's client off
+  the alternate screen, so a redraw scrolls the browser's buffer a line while
+  every cell stays where it was on screen. Positions are screen rows now.
+- **A frame arrives in pieces.** tmux writes one of Claude Code's frames in
+  several chunks and the cursor is wherever the frame is being drawn until the
+  last one. Checking after each chunk saw it a row up and dropped the
+  prediction nearly every time. Predictions are checked once output has been
+  quiet for 20 ms; until then the character on screen is the predicted one,
+  which is the same character in the same cell.
+- **A backspace showed the line going backwards.** Predicting keystrokes one at
+  a time and confirming each against its echo put a character already taken
+  back on screen for a round trip: the server echoes the "c", then a round trip
+  later its deletion. A frame-by-frame check caught it ("abc" → "ab" → "abxy"
+  on the way to "axy"). The prediction is now the whole line from where typing
+  started, drawn over whatever the server shows until the server shows exactly
+  that.
+- **And then the server passed through the final state early.** On its way to
+  "abc" it stops at "ab", which is also where the typist ends up after the
+  backspace, and the prediction was dropped with the "c" and its deletion still
+  on the wire. A match is believed only once a round trip has passed since the
+  last keystroke, measured from the first output after an idle keystroke; the
+  estimate goes up at once and down slowly, because too short shows the line
+  going backwards and too long costs nothing anybody can see.
+- **Clicking into the terminal switched prediction off** for the first
+  characters typed: the focus report xterm sends on a click went down the same
+  path as keystrokes and read as an unpredictable key.
+
+Keys that are not a character or a backspace at the end of the input -- Enter,
+arrows, Escape, Tab, a paste, and `!` `#` `?` on an empty input, which Claude
+Code reads as mode switches and draws nothing for -- drop the prediction, and
+prediction stays off until the typist has paused long enough for the server to
+have caught up, so nothing is anchored on a screen that is about to change. A
+prediction the server never agrees with is dropped two seconds after the last
+keystroke. `localStorage['vibepanel.localEcho']` is `'off'` to disable it on a
+device and `'debug'` to log every dropped prediction and why.
+
+The frame-by-frame check -- type, backspace twice, type, a wide character,
+full-width punctuation, backspace, more punctuation, and record every distinct
+state the input line shows -- passed twelve runs out of twelve across 0, 300
+and 800 ms round trips at two typing speeds. `localEcho.test.ts` holds each of
+the failures above as a case, and removing the round-trip wait fails it.
+
+## 2026-09-28 — The same for Codex and opencode
+
+Both agents were read off in tmux the same way Claude Code was -- cursor
+position while typing, wide characters, backspace, and every character that
+can start an input -- and both keep the real cursor exactly where the next
+character goes. What differs between the three is small enough to be a table
+(`AGENTS` in `components/localEcho.ts`):
+
+| | marker | mode keys on an empty input | input region |
+|---|---|---|---|
+| Claude Code | `❯` | `!` bash, `#` memory, `?` help | the row |
+| Codex | `›` | `!` shell, `?` shortcuts | the row |
+| opencode | `┃` | `!` shell | a box with its own background |
+
+Every other first character is echoed, `/` `@` `$` `#` included: their menus
+open above or below the input row without moving it.
+
+Two things opencode needed that the other two did not:
+
+- **Its hint is not dim.** Claude Code and Codex draw "Try …" and "Ask Codex to
+  do anything" with SGR 2; opencode draws "Ask anything…" in a grey from its
+  theme. So an empty input is recognised by the marker instead -- nothing but
+  blanks between it and the cursor -- and on an empty input whatever follows
+  the cursor is the hint and is covered.
+- **Its input is a box.** It has its own background (a lighter grey than the
+  page) and wraps at its edge, not the terminal's. The input region is the run
+  of cells with the cursor cell's background; predictions stop short of its
+  end, and the layer draws in the cell's own colours. Before that, a predicted
+  character sat on the terminal's background as a dark block inside the box.
+  Codex tints its composer too, in a light theme, which the same code covers.
+
+Measured the same way as Claude Code, through a 300 ms round trip:
+
+```
+                 before       after (median / worst)   panel's own work
+Codex            348 ms       8 / 15 ms                0.9 ms
+opencode         331 ms       9 / 15 ms                0.8 ms
+```
+
+The frame-by-frame check (type, backspace twice, type, a wide character,
+full-width punctuation, backspace, more) passes on both at two typing speeds,
+and a screenshot taken while the prediction is on screen at an 800 ms round
+trip is the same row as the server's own echo a moment later, background
+included. One visible difference remains: opencode sets a block cursor and the
+layer draws a bar for the moment before the echo lands.
+
+Two measurements worth keeping. The first predicted character after a page
+load cost 28-33 ms while every later one cost under 2 ms: under the WebGL
+renderer nothing had laid out the terminal font as DOM text yet, and the
+layer now lays it out once, invisibly, when it attaches. And a first keystroke
+right after taking control of a session still sometimes shows 30-40 ms --
+measured as the time before *any* handler ran, so the browser's queue behind
+the redraw that taking control causes, not this code, which ran in about a
+millisecond once it was reached.
+
+## 2026-09-28 — A held backspace that deleted the last characters twice
+
+Reported as: deleting fast, the line empties, then the last three characters
+come back and delete themselves again. Reproduced with a held backspace --
+one press every 30 ms, carrying on past the start of the input the way key
+repeat does -- through a 300 ms round trip, recording every state the input
+line showed. Two causes, found one after the other:
+
+- **A space inside the input read as the start of it.** Erasing text the
+  server already had moved the anchor left one cell at a time, and stopped
+  when the cell before it was blank -- which is what the padding after the
+  marker looks like, and also what the space in "hello world" looks like. The
+  prediction was dropped at "hello", and the server's line, five keystrokes
+  behind, came back as "hello world". The start of the input is now the
+  marker's column plus the agent's padding, found when the prediction starts,
+  and a backspace past it is absorbed rather than ending anything.
+- **A frame moves the cursor before it redraws the row.** With the key held a
+  little slower, the line went "" → "h" → "". The backspace that reached the
+  start read the cursor at the start while the row still held the "h": the
+  server's frame had moved the cursor and not yet rewritten the line. Ending
+  the prediction there showed the "h". It now ends only on a backspace typed
+  on an input that was already empty with nothing predicted; otherwise the
+  empty line is held until the server's whole frame agrees, a round trip
+  after the last key, like every other prediction. An emptied opencode input
+  shows its grey hint again, and that counts as agreeing.
+
+Checked on all three agents: a held backspace at 30, 60 and 100 ms a press,
+three runs each, plus the mixed typing check, 33 runs, and the line only ever
+got shorter. `localEcho.test.ts` holds both cases.
