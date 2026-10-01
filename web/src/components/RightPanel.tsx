@@ -15,10 +15,11 @@ import {
 import type { Project, Session } from '../protocol/wire'
 import type { PanelSocket } from '../protocol/socket'
 import { FileTree } from './panels/FileTree'
+import { DesktopView } from './panels/DesktopView'
 import { GitPanel } from './panels/GitPanel'
 import { SystemMonitor } from './panels/SystemMonitor'
 import { Notes } from './panels/Notes'
-import { GLOBAL_NOTE } from '../protocol/api'
+import { api, GLOBAL_NOTE } from '../protocol/api'
 import { ErrorBoundary } from './ErrorBoundary'
 import { PanelDock } from './panels/PanelDock'
 import { DETAIL_META } from './panels/dock'
@@ -198,6 +199,19 @@ export function RightPanel(props: Props) {
    * directly.
    */
   const [opened, setDetail] = useState<{ block: DetailBlock; full: boolean } | null>(null)
+  // Whether the panel was started with --desktop. Asked once: it is a flag on
+  // the server's command line and does not change while this page is open.
+  const [desktopOn, setDesktopOn] = useState(false)
+  useEffect(() => {
+    let live = true
+    void api.desktop().then(
+      (d) => live && setDesktopOn(d.enabled),
+      () => {},
+    )
+    return () => {
+      live = false
+    }
+  }, [])
   const openDetail = useCallback((block: DetailBlock) => setDetail({ block, full: false }), [])
   // Adjusted during render rather than in an effect, so the Preview opens in
   // the same frame the ask arrives instead of one frame later.
@@ -410,6 +424,10 @@ export function RightPanel(props: Props) {
         // used to open first was the same figures a third time, in a column
         // too narrow to lay them out.
         onOpen={(block) => (block === 'tokens' ? props.onOpenTokens() : openDetail(block))}
+        // Not mounted while the detail is open: one live view at a time, so
+        // the thumbnail is not a second stream behind the big one.
+        screen={desktopOn && opened?.block !== 'screen' ? <DesktopView mode="card" /> : undefined}
+        onOpenScreen={() => openDetail('screen')}
       />
     </ErrorBoundary>
   )
@@ -448,6 +466,9 @@ export function RightPanel(props: Props) {
 
   /** What an opened block draws, and whether it has a full-width form. */
   const detailBody = (block: DetailBlock, full = false) => {
+    if (block === 'screen') {
+      return <DesktopView mode={full ? 'full' : 'panel'} />
+    }
     if (block === 'monitor') {
       return <SystemMonitor sessions={props.sessions} density="wide" onManage={props.onOpenResources} />
     }

@@ -486,6 +486,12 @@ func TestEveryAuditEventIsAccountedFor(t *testing.T) {
 		"project.archived_idle": true,
 		"project.restored":      true,
 		"project.archive_idle":  true,
+		// The desktop: each thing the agent did to the screen, and the person
+		// stopping it and letting it carry on. One prefix, so a GROUP BY
+		// answers "what happened on that screen".
+		"desktop.agent":  true,
+		"desktop.stop":   true,
+		"desktop.resume": true,
 	}
 
 	files, err := filepath.Glob("*.go")

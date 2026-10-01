@@ -35,6 +35,7 @@ const Commands = `  serve      run the panel (the default with no command)
   account    create the first account without the browser
   page       make, check, screenshot and publish share pages
   mcp        serve the chat assistant's read-only tools over stdio (started by the panel)
+  desktop-mcp  serve the desktop (--desktop) to an agent over stdio: claude mcp add desktop -- vibepanel desktop-mcp
   doctor     check tmux, the database, disk and isolation
   version    print the version`
 
@@ -64,6 +65,7 @@ func Load(args []string, out io.Writer) (Config, error) {
 	fs.StringVar(&c.ACMEDNSProvider, "acme-dns", c.ACMEDNSProvider, "DNS-01 provider for ACME, e.g. cloudflare")
 	fs.StringVar(&c.TmuxSocket, "tmux-socket", c.TmuxSocket, "tmux -L socket name; keep it dedicated to stay isolated from your own sessions")
 	fs.StringVar(&c.Isolation, "isolation", c.Isolation, "auto | off: run sessions in a systemd scope of their own when the panel is a service")
+	fs.StringVar(&c.Desktop, "desktop", c.Desktop, "X11 display to show and let an agent operate, e.g. :0; empty turns it off")
 	fs.StringVar(&c.StaticDir, "static-dir", c.StaticDir, "serve the frontend from this directory instead of the embedded build")
 	proxies := fs.String("trusted-proxies", "", "comma-separated CIDRs whose X-Forwarded-For is trusted")
 	allowFrom := fs.String("allow-from", "", "comma-separated CIDRs allowed to reach the panel; empty allows all")

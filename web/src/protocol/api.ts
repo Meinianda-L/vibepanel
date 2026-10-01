@@ -1,5 +1,8 @@
 import type {
   ApiToken,
+  DesktopInfo,
+  DesktopInput,
+  DesktopStatus,
   AuditEntry,
   DirListing,
   AuthState,
@@ -1093,6 +1096,13 @@ export const api = {
    */
   github: (projectId: string) =>
     request<GitHubResult>(`/api/projects/${projectId}/git/github`, { method: 'POST' }),
+
+  /** The desktop (--desktop): whether it is on, and its status. */
+  desktop: () => request<DesktopInfo>('/api/desktop'),
+  desktopStop: () => request<DesktopStatus>('/api/desktop/stop', { method: 'POST' }),
+  desktopResume: () => request<DesktopStatus>('/api/desktop/resume', { method: 'POST' }),
+  desktopInput: (input: DesktopInput) =>
+    request<void>('/api/desktop/input', { method: 'POST', body: JSON.stringify(input) }),
 
   /** Returns the absolute paths the files landed at, ready to type. */
   /**

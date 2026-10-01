@@ -263,12 +263,20 @@ var mcpTools = []mcpTool{
 // serveMCP answers requests from r on w until r ends. Exposed on readers
 // and writers rather than the process's so the test drives it over a pipe.
 func serveMCP(r io.Reader, w io.Writer, errw io.Writer, client *mcpClient) error {
+	return serveRPC(r, w, errw, "vibepanel mcp", func(ctx context.Context, req rpcRequest) (any, *rpcError) {
+		return handleMCP(ctx, client, req)
+	})
+}
+
+// serveRPC is the stdio JSON-RPC loop both MCP servers share; handle answers
+// one request.
+func serveRPC(r io.Reader, w io.Writer, errw io.Writer, name string, handle func(context.Context, rpcRequest) (any, *rpcError)) error {
 	var wmu sync.Mutex
 	write := func(res rpcResponse) {
 		res.JSONRPC = "2.0"
 		b, err := json.Marshal(res)
 		if err != nil {
-			fmt.Fprintln(errw, "vibepanel mcp: encoding a response:", err)
+			fmt.Fprintln(errw, name+": encoding a response:", err)
 			return
 		}
 		wmu.Lock()
@@ -299,7 +307,7 @@ func serveMCP(r io.Reader, w io.Writer, errw io.Writer, client *mcpClient) error
 			// and it wants no answer; neither does anything else.
 			continue
 		}
-		result, rerr := handleMCP(context.Background(), client, req)
+		result, rerr := handle(context.Background(), req)
 		if rerr != nil {
 			write(rpcResponse{ID: req.ID, Error: rerr})
 			continue
@@ -307,7 +315,7 @@ func serveMCP(r io.Reader, w io.Writer, errw io.Writer, client *mcpClient) error
 		write(rpcResponse{ID: req.ID, Result: result})
 	}
 	if err := sc.Err(); err != nil {
-		return fmt.Errorf("vibepanel mcp: reading stdin: %w", err)
+		return fmt.Errorf("%s: reading stdin: %w", name, err)
 	}
 	return nil
 }

@@ -24591,3 +24591,104 @@ line showed. Two causes, found one after the other:
 Checked on all three agents: a held backspace at 30, 60 and 100 ms a press,
 three runs each, plus the mixed typing check, 33 runs, and the line only ever
 got shorter. `localEcho.test.ts` holds both cases.
+
+## 2026-10-01 — The desktop: a screen an agent operates, live in the panel
+
+Asked for: install the panel on a Mac mini, give an agent control of that
+computer the way Grok's and Muse's agents use software, and let the person
+watch it happen live -- with the extra instruction that the mini is slow and
+the optimisation should be as far as it goes.
+
+The mini turned out to run Linux Mint 22.3 (Xfce, X11, xfwm4's compositor on)
+on a Core 2 Duo P8600 from 2008 with two cores. Everything below is measured
+there.
+
+### The shape
+
+`--desktop :0` names an X11 display on the panel's machine. `internal/desktop`
+talks to it as an ordinary X client (pure-Go xgb, so `CGO_ENABLED=0` still
+builds): XTEST for the pointer and keyboard, GetImage for pixels. It takes no
+address from any request and stores no password -- the retired VNC tab was a
+proxy to whatever address a row named, with the display's password in the
+clear, and this was written to be none of that.
+
+Two surfaces with two credentials, kept apart like share links (red line 8):
+the person's routes under RequireAuth (status, Stop, Resume, their own input,
+the stream), and the agent's two routes under a token minted at start and
+written to `desktop-agent.json` (0600) in the data directory.
+`TestTheDesktopAgentsTokenOpensItsTwoRoutesAndNothingElse` holds both
+directions: a session cookie cannot act as the agent, and the agent's token
+opens nothing else -- including Resume on itself. `vibepanel desktop-mcp` is
+the agent's side, a stdio MCP server (`claude mcp add desktop -- vibepanel
+desktop-mcp`) whose every tool is one request to those routes, so that Stop is
+enforced by the panel rather than requested of the agent's process. Every
+agent action is audited as `desktop.agent`.
+
+The person wins every contest: Stop refuses the agent until Resume, and for
+three seconds after the person's own input the agent is refused with "the
+person is using the screen" rather than fighting them for the pointer.
+
+### Not video
+
+A software H.264 encoder at 1080p is two cores of that machine, which has no
+hardware encoder, and a desktop is mostly still. The stream is what remote
+desktop protocols send: changed rectangles as JPEG tiles, drawn by the browser
+onto its copy of the screen. Still screen, nothing sent; a line of terminal
+text, a couple of 64-pixel tiles.
+
+### Measured, in the order it was found
+
+The first version captured the whole screen every 100 ms while anybody
+watched:
+
+```
+capture (GetImage over the socket)   95 ms   25 MB allocated
+resize to half (float box filter)    47 ms   15 MB
+JPEG at half / full size             22 / 104 ms
+```
+
+over 160 ms of work for a 100 ms tick, one core pinned before anything moved.
+What replaced it, each step for a number above:
+
+- **DAMAGE**: the server reports changed rectangles; nothing is captured to
+  find out, and a still screen costs nothing.
+- **MIT-SHM** into a segment that *is* the screen buffer: a full capture 95 →
+  37 ms and 25 MB → 560 bytes; full-width rectangles land in place with no
+  copy at all. What is left is the server reading the framebuffer.
+- **Only the damaged tiles**, compared with what was last sent, because damage
+  over-reports.
+- **Integer scaling fused with the colour conversion**, with dedicated 1:1 and
+  1:2 loops reading four bytes at a time: half-size of a whole screen 47 → 11 ms.
+- **The frame gap follows the cost**: twice the time the last frame took to
+  encode, from 33 ms, so a screen that is all motion gets fewer frames rather
+  than the CPU.
+
+Then the number that mattered most turned out wrong: every frame still
+captured the whole screen. Under xfwm4's compositor, damage on the root window
+reports the full screen three times per repaint, however small the change.
+`watch.go` does what compositors do instead when one owns `_NET_WM_CM_S0`: a
+damage object per top-level window, whose notifications carry the window's
+position, plus SubstructureNotify for windows appearing, moving and going.
+Damage became the 60x320 bar that actually moved.
+
+And a damage event inside the frame gap waited for the *next* event before
+being sent; a timer for the end of the gap took a 30-frame animation from 18 to
+24 frames a second.
+
+```
+                                   frames/s   CPU, one core
+watching a still screen               —         0.7 %
+480x320 animation (30 fps)           23.9       7.7 %
+1600x900 animation (30 fps)          22.4      13.4 %
+the running panel, full-window view
+  open on a still screen              —         1.65 %
+```
+
+The agent's screenshots (1280x720, one per action) went 160 → 108 ms: the
+general resize built a 16 MB intermediate the Core 2's 3 MB cache could not
+hold, and a fixed 3:2 path (each 3x3 block to 2x2, weights 4/2/2/1 over 9) is
+17 ms. What remains is the capture and the JPEG.
+
+The X connection's events are read by a goroutine for as long as it is open:
+xgb queues them, and a full queue stops the connection, captures and clicks
+with it.

@@ -1,9 +1,9 @@
 import { ChevronsUpDown } from 'lucide-react'
 
 import { DOCK_BLOCKS, type DockBlock, type PanelDensity } from '../chrome'
-import { t, useLang } from '../../i18n'
+import { t, useLang, type Key } from '../../i18n'
 import { safeText } from '../text'
-import { DOCK_META } from './dock'
+import { DETAIL_META, DOCK_META } from './dock'
 import { SystemStrip } from './SystemStrip'
 import { TokenBlock } from './TokenBlock'
 import { SPEND_SPAN, type Spend } from './useSpend'
@@ -29,6 +29,8 @@ export function PanelDock({
   projectId,
   projectName,
   onOpen,
+  screen,
+  onOpenScreen,
 }: {
   spend: Spend
   density: PanelDensity
@@ -36,17 +38,30 @@ export function PanelDock({
   projectName: string | null
   /** Opens one block into the whole side panel. See PanelDetail. */
   onOpen: (block: DockBlock) => void
+  /**
+   * The desktop's thumbnail, when the panel was started with --desktop. At
+   * the top: while an agent is operating a screen, the screen is the thing to
+   * keep in the corner of your eye.
+   */
+  screen?: React.ReactNode
+  onOpenScreen?: () => void
 }) {
   useLang()
   return (
     <div data-testid="panel-dock" className="flex h-full min-h-0 flex-col overflow-y-auto">
+      {screen && onOpenScreen && (
+        <section data-testid="dock-screen" className="shrink-0">
+          <DockHeader icon={DETAIL_META.screen.icon} label={DETAIL_META.screen.key} id="screen" onOpen={onOpenScreen} />
+          {screen}
+        </section>
+      )}
       {DOCK_BLOCKS.map((block) => (
         <section
           key={block}
           data-testid={`dock-${block}`}
           className="shrink-0 border-t border-hairline first:border-t-0"
         >
-          <DockHeader block={block} onOpen={() => onOpen(block)} />
+          <DockHeader icon={DOCK_META[block].icon} label={DOCK_META[block].key} id={block} onOpen={() => onOpen(block)} />
           {block === 'tokens' ? (
             spend.error !== null ? (
               <p className="px-3 py-2 text-vp-sm" style={{ color: 'var(--vp-state-waiting)' }}>
@@ -88,13 +103,22 @@ export function PanelDock({
  * orthogonal: a width, an alignment, and a padding that suits a row rather than
  * a square.
  */
-function DockHeader({ block, onOpen }: { block: DockBlock; onOpen: () => void }) {
-  const { icon: Icon, key } = DOCK_META[block]
-  const name = t(key)
+function DockHeader({
+  icon: Icon,
+  label,
+  id,
+  onOpen,
+}: {
+  icon: React.ComponentType<{ size?: number; className?: string }>
+  label: Key
+  id: string
+  onOpen: () => void
+}) {
+  const name = t(label)
   return (
     <button
       type="button"
-      data-testid={`dock-open-${block}`}
+      data-testid={`dock-open-${id}`}
       onClick={onOpen}
       title={t('detail.open', { what: name })}
       aria-label={t('detail.open', { what: name })}

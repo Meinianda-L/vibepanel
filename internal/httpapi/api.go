@@ -28,6 +28,7 @@ import (
 	"github.com/jiangmuran/vibepanel/internal/claudelog"
 	"github.com/jiangmuran/vibepanel/internal/codexlog"
 	"github.com/jiangmuran/vibepanel/internal/config"
+	"github.com/jiangmuran/vibepanel/internal/desktop"
 	"github.com/jiangmuran/vibepanel/internal/git"
 	"github.com/jiangmuran/vibepanel/internal/hooks"
 	"github.com/jiangmuran/vibepanel/internal/id"
@@ -59,6 +60,12 @@ type Server struct {
 	// thing its hooks never report, an interrupt.
 	claudeLogs claudelog.Watcher
 	Sampler    *sysmon.Sampler
+
+	// Desktop is the X11 display the panel shows and an agent may operate;
+	// nil when --desktop is empty. desktopToken is the agent's credential for
+	// /api/desktop/agent/*, minted at start. See desktop.go.
+	Desktop      *desktop.Desktop
+	desktopToken string
 
 	// Resources is the memory governor. Nil where there is nothing to govern
 	// (not Linux) and in tests that do not build one.
@@ -448,6 +455,9 @@ func (s *Server) Routes() http.Handler {
 		// An admin page's API: its own credential, its own table, the same
 		// placement as the share routes. See admingrants.go.
 		s.registerAdminAPIRoutes(r)
+		// The desktop agent's two routes: its own token, checked in the
+		// handler, and nothing a session cookie opens. See desktop.go.
+		s.registerDesktopAgentRoutes(r)
 
 		// Everything else needs a session. This panel hands out a writable
 		// terminal; there is no such thing as a harmless unauthenticated
@@ -496,6 +506,7 @@ func (s *Server) Routes() http.Handler {
 			// here, by somebody signed in. Nothing about a page is editable
 			// through a share token.
 			s.registerPageRoutes(r)
+			s.registerDesktopRoutes(r)
 		})
 
 		r.NotFound(func(w http.ResponseWriter, r *http.Request) {

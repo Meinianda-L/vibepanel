@@ -1832,6 +1832,77 @@ The handshake takes the same credential as everything else. `Origin` must match
 `Host`, which is what stops another page opening this socket with your cookies
 attached.
 
+## The desktop
+
+Present when the panel was started with `--desktop :0` (or
+`VIBEPANEL_DESKTOP`): an X11 display on the panel's machine, shown live and
+operable by an agent, with a person able to take over or stop it. With the
+option off, `GET /api/desktop` answers `{"enabled": false}` and every other
+route here answers `404`.
+
+### `GET /api/desktop`
+
+`{"enabled": true, "status": {...}}`. The status is `display`, `width`,
+`height`, `stopped` (the person pressed Stop), `person` (the person used the
+screen in the last three seconds), `last` (the latest action: `by` is `agent`
+or `person`, `kind`, `x`, `y`, `text`, `at`), `viewers`, and `problem` when the
+display cannot be reached.
+
+### `POST /api/desktop/stop`
+
+Takes the screen away from the agent: its actions are refused with `409` until
+`resume`. Answers the status. Audited as `desktop.stop`.
+
+### `POST /api/desktop/resume`
+
+Gives it back. Audited as `desktop.resume`.
+
+### `POST /api/desktop/input`
+
+The person's own input, in screen pixels: `{"type": "move" | "down" | "up" |
+"click" | "scroll" | "keydown" | "keyup" | "type", "x", "y", "button":
+"left" | "middle" | "right", "count", "dx", "dy", "key", "text"}`. `key` is a
+browser key name (`Enter`, `ArrowLeft`, `Control`, `a`); `type` types text in
+any language. `204`. Keeps the agent off the screen for three seconds after.
+
+### `GET /api/desktop/stream`
+
+A WebSocket, on the same origin rule as `/ws`. `?w=` is the width wanted; the
+stream picks 1/1, 1/2 or 1/4 of the screen to meet it. Text messages are the
+status above, sent when it changes. Binary messages are records back to back,
+each `kind` (1 byte), length (4 bytes, big-endian), payload:
+
+| kind | payload |
+|---|---|
+| 1, keyframe | scale (1 byte), screen width, screen height, view width, view height (uint16 each) |
+| 2, tile | x, y, width, height in view pixels (uint16 each), then a JPEG |
+| 3, pointer | x, y in screen pixels (uint16 each) |
+
+A keyframe is followed by tiles covering the whole view; after it only tiles
+whose pixels changed are sent. Nothing is sent while the screen is still.
+
+### `GET /api/desktop/agent/screenshot`
+
+The agent's credential is `Authorization: Bearer <token>`, where the token is
+in `desktop-agent.json` in the data directory (mode 0600, rewritten at every
+start); a session cookie does not open these two routes, and this token opens
+nothing else. `vibepanel desktop-mcp` is the client.
+
+Answers `{"image": <base64 JPEG>, "width", "height", "screenWidth",
+"screenHeight", "pointerX", "pointerY", "stopped"}`: the screen fitted into
+1280×800, and the pointer in the same coordinates.
+
+### `POST /api/desktop/agent/act`
+
+`{"action", "x", "y", "x2", "y2", "text", "key", "dx", "dy", "seconds",
+"screenshot"}` in the coordinates of the screenshots. `action` is `move`,
+`click`, `double_click`, `triple_click`, `right_click`, `middle_click`,
+`drag` (to `x2`, `y2`), `scroll` (`dy` notches down, `dx` right), `type`,
+`key` (`Return`, `ctrl+l`, `alt+F4` …) or `wait` (`seconds`, at most 10).
+Answers `{"ok": true, "screenshot": {...}}` with a screenshot taken just after,
+unless `"screenshot": false`. `409` while stopped or while the person is using
+the screen. Every action is audited as `desktop.agent`.
+
 ## Attaching a harness
 
 The supported way to have a program manage every session is three things you

@@ -67,6 +67,14 @@ type Config struct {
 	// never see, resize or kill the user's own tmux sessions.
 	TmuxSocket string
 
+	// Desktop is the X11 display the panel shows and lets an agent operate,
+	// e.g. ":0"; empty turns the feature off entirely, which is the default.
+	// It is a display on this machine, reached the way any X client reaches
+	// it -- DISPLAY and XAUTHORITY of the user the panel runs as -- never an
+	// address: the retired VNC proxy is why (docs/build-log.md, "The VNC
+	// tab"), and internal/desktop says what this does instead.
+	Desktop string
+
 	// Isolation is "auto" or "off". Auto moves the sessions into a systemd scope
 	// of their own when the panel runs as a service; see internal/resources.
 	// Off is for a host where something else already manages the cgroups the
@@ -205,6 +213,7 @@ func (c *Config) envOverlay() {
 	str(&c.TmuxSocket, "VIBEPANEL_TMUX_SOCKET")
 	str(&c.StaticDir, "VIBEPANEL_STATIC_DIR")
 	str(&c.Isolation, "VIBEPANEL_ISOLATION")
+	str(&c.Desktop, "VIBEPANEL_DESKTOP")
 	seen["VIBEPANEL_SESSIONS_PREPARED"] = true
 	c.SessionsPrepared = os.Getenv("VIBEPANEL_SESSIONS_PREPARED") == "1"
 

@@ -2158,3 +2158,46 @@ export interface ChatRoutePreview {
   /** Who would be told, as "channel:peer", after pairing and mutes. */
   peers: string[]
 }
+
+// ─── desktop ────────────────────────────────────────────────────────────────
+// Mirrors internal/desktop.Status and Action. See internal/httpapi/desktop.go.
+
+export interface DesktopAction {
+  by: 'agent' | 'person'
+  kind: string
+  x?: number
+  y?: number
+  text?: string
+  at: string
+}
+
+export interface DesktopStatus {
+  display: string
+  width: number
+  height: number
+  /** The person pressed Stop; the agent is refused until Resume. */
+  stopped: boolean
+  /** The person used the screen in the last few seconds. */
+  person: boolean
+  last?: DesktopAction
+  viewers: number
+  problem?: string
+}
+
+export interface DesktopInfo {
+  enabled: boolean
+  status?: DesktopStatus
+}
+
+/** One thing the person does on the view, in screen pixels. */
+export interface DesktopInput {
+  type: 'move' | 'down' | 'up' | 'click' | 'scroll' | 'keydown' | 'keyup' | 'type'
+  x?: number
+  y?: number
+  button?: 'left' | 'middle' | 'right'
+  count?: number
+  dx?: number
+  dy?: number
+  key?: string
+  text?: string
+}

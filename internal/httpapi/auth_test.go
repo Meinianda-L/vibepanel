@@ -44,6 +44,8 @@ func anonymousClient(t *testing.T) *http.Client {
 var openRoutes = map[string]string{
 	"/api/health":                    "a probe, and it says nothing sensitive",
 	"/api/hook/state":                "runs outside the browser as a child of an agent, and carries its own token",
+	"/api/desktop/agent/screenshot":  "the desktop agent's own token, checked in the handler; a session cookie does not open it",
+	"/api/desktop/agent/act":         "the desktop agent's own token, checked in the handler; a session cookie does not open it",
 	"/api/auth/login":                "how you get in; the login throttle guards it instead",
 	"/api/auth/logout":               "ending a session you may not have is not an error worth a 401",
 	"/api/auth/setup":                "the one-time setup token is the credential, and it closes forever after",

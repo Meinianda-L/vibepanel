@@ -15,8 +15,10 @@ require (
 	github.com/dop251/goja v0.0.0-20260911104922-fabc3b8078ad
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-webauthn/webauthn v0.17.4
+	github.com/jezek/xgb v1.3.1
 	github.com/libdns/cloudflare v0.2.2
 	golang.org/x/crypto v0.57.0
+	golang.org/x/sys v0.48.0
 	modernc.org/sqlite v1.57.0
 )
 
@@ -49,7 +51,6 @@ require (
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
 	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/tools v0.49.0 // indirect
 	modernc.org/libc v1.74.4 // indirect

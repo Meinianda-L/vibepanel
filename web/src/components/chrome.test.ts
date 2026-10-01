@@ -324,13 +324,17 @@ describe('the blocks that open out of their compact form', () => {
     }
   })
 
-  it('has two that are not in the dock, and knows them', () => {
+  it('has three that are not in the dock list, and knows them', () => {
     // The repository and the share page's Preview. Both compact forms are a
     // line in the file tree's header, because each is a fact about the
     // directory above it rather than about the machine — but the gesture that
     // opens them is the same one.
+    //
+    // And the desktop, whose compact form is in the dock but only when the
+    // panel was started with --desktop, so it is not one of DOCK_BLOCKS: the
+    // dock draws it from a prop rather than from the list every panel has.
     const extra = DETAIL_BLOCKS.filter((b) => !(DOCK_BLOCKS as readonly string[]).includes(b))
-    expect(extra).toEqual(['repo', 'page'])
+    expect(extra).toEqual(['repo', 'page', 'screen'])
   })
 
   it('recognises exactly the blocks it lists', () => {

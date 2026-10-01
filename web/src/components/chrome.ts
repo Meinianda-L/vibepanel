@@ -109,7 +109,11 @@ export type DockBlock = (typeof DOCK_BLOCKS)[number]
 // the repository is -- it is about the directory -- and it is the one block
 // that is mostly a picture of something else, which is why its full form is
 // the one that earns the window.
-export const DETAIL_BLOCKS = ['repo', 'page', 'monitor'] as const
+// The desktop is the fifth: a live picture of a screen an agent may be
+// operating, whose compact form sits at the top of the dock while the panel
+// was started with --desktop. Like the Preview, it is mostly a picture of
+// something else, and its full form earns the window.
+export const DETAIL_BLOCKS = ['repo', 'page', 'monitor', 'screen'] as const
 
 export type DetailBlock = (typeof DETAIL_BLOCKS)[number]
 

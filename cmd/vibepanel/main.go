@@ -104,17 +104,18 @@ func commandNames() []string {
 
 func init() {
 	commands = map[string]func([]string) error{
-		"serve":   cmdServe,
-		"project": cmdProject,
-		"session": cmdSession,
-		"doctor":  cmdDoctor,
-		"hook":    cmdHook,
-		"tune":    cmdTune,
-		"service": cmdService,
-		"account": cmdAccount,
-		"page":    cmdPage,
-		"mcp":     cmdMCP,
-		"version": func([]string) error { fmt.Println("vibepanel", version.String()); return nil },
+		"serve":       cmdServe,
+		"project":     cmdProject,
+		"session":     cmdSession,
+		"doctor":      cmdDoctor,
+		"hook":        cmdHook,
+		"tune":        cmdTune,
+		"service":     cmdService,
+		"account":     cmdAccount,
+		"page":        cmdPage,
+		"mcp":         cmdMCP,
+		"desktop-mcp": cmdDesktopMCP,
+		"version":     func([]string) error { fmt.Println("vibepanel", version.String()); return nil },
 	}
 }
 
@@ -248,6 +249,16 @@ func cmdServe(args []string) error {
 			BlockedAudit:   auth.NewCooldown(time.Minute),
 		},
 		Log: logger,
+	}
+
+	// The desktop, when one was named. A display that cannot be reached yet
+	// is not a reason to refuse to start: the person's X session may log in
+	// after the panel, and the view says what is wrong until it does.
+	if err := srv.StartDesktop(); err != nil {
+		logger.Warn("desktop agent file could not be written", "err", err)
+	} else if a.cfg.Desktop != "" {
+		st := srv.Desktop.Status()
+		logger.Info("desktop", "display", a.cfg.Desktop, "size", fmt.Sprintf("%dx%d", st.Width, st.Height), "problem", st.Problem)
 	}
 
 	// Token usage reads the agents' own transcripts out of the home directory

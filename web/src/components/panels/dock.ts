@@ -1,4 +1,4 @@
-import { Activity, Coins, GitBranch, PanelsTopLeft } from 'lucide-react'
+import { Activity, Coins, GitBranch, Monitor, PanelsTopLeft } from 'lucide-react'
 
 import type { DetailBlock, DockBlock } from '../chrome'
 import type { Key } from '../../i18n'
@@ -31,4 +31,5 @@ export const DETAIL_META: Record<DetailBlock, { icon: typeof Activity; key: Key 
   monitor: DOCK_META.monitor,
   repo: { icon: GitBranch, key: 'panel.git' },
   page: { icon: PanelsTopLeft, key: 'panel.page' },
+  screen: { icon: Monitor, key: 'panel.screen' },
 }
