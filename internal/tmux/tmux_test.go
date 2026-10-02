@@ -102,6 +102,9 @@ func TestEnsureServerLoadsConfig(t *testing.T) {
 		// 500ms of default disambiguation makes every Esc feel like the app
 		// has hung, which reads as the agent being broken rather than tmux.
 		{[]string{"show-options", "-s", "-v", "escape-time"}, "0"},
+		// Without it Shift+Enter never reaches the agents that ask for it, and
+		// pi warns about it on every start.
+		{[]string{"show-options", "-s", "-v", "extended-keys"}, "on"},
 		{[]string{"show-options", "-s", "-v", "default-terminal"}, "tmux-256color"},
 	} {
 		got, err := c.run(ctx, tc.args...)

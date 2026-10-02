@@ -115,6 +115,14 @@ interface Props {
   /** Bumped to open the share page's Preview, when a page is opened from
    *  the settings. A counter rather than a flag, so the same ask twice is two. */
   previewAsk?: number
+  /**
+   * Whether the desktop's screen should be what the panel shows, the way an
+   * agent's computer opens beside the conversation in Claude: the header's
+   * toggle and an agent starting to act set it, and the panel reports back
+   * when the person opens or closes it themselves.
+   */
+  screenWanted?: boolean
+  onScreenWanted?: (wanted: boolean) => void
 }
 
 /** Pixels of movement before a press on a tab becomes a drag.
@@ -198,7 +206,27 @@ export function RightPanel(props: Props) {
    * Tokens are not in here: their dock header opens the full-width token view
    * directly.
    */
-  const [opened, setDetail] = useState<{ block: DetailBlock; full: boolean } | null>(null)
+  const [opened, setDetail] = useState<{ block: DetailBlock; full: boolean } | null>(() =>
+    props.screenWanted ? { block: 'screen', full: false } : null,
+  )
+  // Follows screenWanted when it changes, adjusted during render like the
+  // Preview's ask below, so the screen opens in the frame the panel does.
+  const [screenSeen, setScreenSeen] = useState(props.screenWanted ?? false)
+  if ((props.screenWanted ?? false) !== screenSeen) {
+    setScreenSeen(props.screenWanted ?? false)
+    if (props.screenWanted) setDetail({ block: 'screen', full: false })
+    else if (opened?.block === 'screen') setDetail(null)
+  }
+  // And reports the other direction: the person opening the screen from the
+  // dock or closing it with Back or Escape.
+  const screenShown = opened?.block === 'screen'
+  const onScreenWanted = useRef(props.onScreenWanted)
+  useEffect(() => {
+    onScreenWanted.current = props.onScreenWanted
+  })
+  useEffect(() => {
+    if (screenShown !== screenSeen) onScreenWanted.current?.(screenShown)
+  }, [screenShown, screenSeen])
   // Whether the panel was started with --desktop. Asked once: it is a flag on
   // the server's command line and does not change while this page is open.
   const [desktopOn, setDesktopOn] = useState(false)

@@ -115,6 +115,7 @@ func init() {
 		"page":        cmdPage,
 		"mcp":         cmdMCP,
 		"desktop-mcp": cmdDesktopMCP,
+		"desktop":     cmdDesktop,
 		"version":     func([]string) error { fmt.Println("vibepanel", version.String()); return nil },
 	}
 }

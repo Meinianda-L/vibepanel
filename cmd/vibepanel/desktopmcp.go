@@ -37,29 +37,28 @@ func cmdDesktopMCP(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	path := *file
-	if path == "" {
-		path = filepath.Join(config.Default().DataDir, httpapi.DesktopAgentFile)
-	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("vibepanel desktop-mcp: %w (is the panel running with --desktop?)", err)
-	}
-	var agent httpapi.DesktopAgent
-	if err := json.Unmarshal(b, &agent); err != nil || agent.URL == "" || agent.Token == "" {
-		return fmt.Errorf("vibepanel desktop-mcp: %s is not a desktop agent file", path)
-	}
-	u, err := url.Parse(agent.URL)
+	c, err := desktopClientFromFile(*file)
 	if err != nil {
 		return err
-	}
-	c := &desktopClient{
-		base: strings.TrimRight(agent.URL, "/"), token: agent.Token,
-		http: &http.Client{Timeout: 60 * time.Second, Transport: mcpTransport(u.Hostname())},
 	}
 	return serveRPC(os.Stdin, os.Stdout, os.Stderr, "vibepanel desktop-mcp", func(ctx context.Context, req rpcRequest) (any, *rpcError) {
 		return handleDesktopMCP(ctx, c, req)
 	})
+}
+
+func defaultDesktopAgentFile() string {
+	return filepath.Join(config.Default().DataDir, httpapi.DesktopAgentFile)
+}
+
+func newDesktopClient(panelURL, token string) (*desktopClient, error) {
+	u, err := url.Parse(panelURL)
+	if err != nil || u.Host == "" {
+		return nil, fmt.Errorf("vibepanel desktop: %q is not a URL", panelURL)
+	}
+	return &desktopClient{
+		base: strings.TrimRight(panelURL, "/"), token: token,
+		http: &http.Client{Timeout: 60 * time.Second, Transport: mcpTransport(u.Hostname())},
+	}, nil
 }
 
 type desktopClient struct {

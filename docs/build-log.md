@@ -24692,3 +24692,34 @@ hold, and a fixed 3:2 path (each 3x3 block to 2x2, weights 4/2/2/1 over 9) is
 The X connection's events are read by a goroutine for as long as it is open:
 xgb queues them, and a full queue stops the connection, captures and clicks
 with it.
+
+## 2026-10-02 — The screen beside the terminal, and agents that cannot speak MCP
+
+The screen was reachable only from the side panel's dock, which is closed by
+default, so a person watching a terminal had no sign that an agent had started
+using the desktop. The header now has a screen toggle beside the panel toggle,
+and `useDesktopPresence` polls `/api/desktop` every three seconds: when the
+agent acts and the screen is not showing, the side panel opens on it, with the
+terminal still the main area. Closing it by hand suppresses that for two
+minutes, because a panel that reopens the moment you close it is a panel
+fighting you.
+
+The first poll happens even while the tab is hidden. Skipping hidden polls is
+right for every later one, but skipping the first meant a tab opened in the
+background never learned that a desktop existed, and the toggle never appeared.
+
+pi has no MCP client, so `vibepanel desktop <action>` is the same eleven tools
+as a command. Each action saves the screenshot after it to a per-user directory
+and prints the path, and an Agent Skill tells pi to read that image before the
+next step. The command uses the same token file and routes as `desktop-mcp`,
+which means Stop applies to it in the same way.
+
+tmux now sets `extended-keys on` with the `extkeys` terminal feature. Without
+them, Shift+Enter and Ctrl+Enter arrive at Claude Code, pi and Hermes as a
+plain Enter, and a multi-line prompt is sent one line at a time.
+
+On the Mac mini (Core 2 Duo, no SSE4.2 or AVX), every native Bun build crashes
+with an illegal instruction: Claude Code from 2.1.113 on, and every opencode
+release. Claude Code stays on 2.1.112 from npm with its auto-updater off. Under
+`qemu-x86_64-static -cpu max`, opencode starts in two minutes and idles at more
+than a core, so it is installed but not kept running.

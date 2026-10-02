@@ -36,6 +36,7 @@ const Commands = `  serve      run the panel (the default with no command)
   page       make, check, screenshot and publish share pages
   mcp        serve the chat assistant's read-only tools over stdio (started by the panel)
   desktop-mcp  serve the desktop (--desktop) to an agent over stdio: claude mcp add desktop -- vibepanel desktop-mcp
+  desktop    operate the desktop from a shell: screenshot, click, type, key ... (for agents without MCP)
   doctor     check tmux, the database, disk and isolation
   version    print the version`
 

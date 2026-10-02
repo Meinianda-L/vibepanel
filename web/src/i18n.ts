@@ -300,6 +300,8 @@ const DICT = {
   'panel.git': { zh: '仓库', en: 'Repo' },
   'panel.page': { zh: '分享页面', en: 'Share page' },
   'panel.screen': { zh: '屏幕', en: 'Screen' },
+  'app.showScreen': { zh: '在侧栏显示屏幕', en: 'Show the screen beside the terminal' },
+  'app.hideScreen': { zh: '收起屏幕', en: 'Put the screen away' },
   'desk.connecting': { zh: '正在连接桌面…', en: 'Connecting to the desktop…' },
   'desk.live': { zh: '实时', en: 'Live' },
   'desk.reconnecting': { zh: '正在重连…', en: 'Reconnecting…' },

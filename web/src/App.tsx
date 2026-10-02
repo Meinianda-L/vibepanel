@@ -5,6 +5,7 @@ import {
   LogOut,
   Menu,
   PanelRight,
+  ScreenShare,
   RotateCcw,
   Settings as SettingsIcon,
 } from 'lucide-react'
@@ -70,6 +71,7 @@ import { notifyOnArchivedWaiting, notifyOnResourceAlert, notifyOnWaiting } from 
 import { readSkipped, shouldNotice, writeSkipped } from './components/updateView'
 import { t, useLang } from './i18n'
 import { echoAgent } from './components/localEcho'
+import { useDesktopPresence } from './components/panels/useDesktopPresence'
 
 /**
  * Safety net only.
@@ -310,6 +312,36 @@ export function App({ auth, onSignOut }: { auth: AuthState; onSignOut: () => voi
     () => panelState(RIGHT_KEY, RIGHT_OPEN_KEY, RIGHT_DEFAULT_WIDTH).open,
   )
   const rightWidth = rightOpen ? rightSize : 0
+
+  // The desktop's screen, beside the terminal the way an agent's computer
+  // opens beside the conversation in Claude. The terminal stays the main
+  // thing: the screen is the side panel's, opened by the toggle in the header
+  // or by an agent starting to act, and put away again by the same toggle.
+  const [screenWanted, setScreenWanted] = useState(false)
+  // Whether opening the screen is what opened the panel, so closing it puts
+  // the panel back the way it was.
+  const screenOpenedPanel = useRef(false)
+  // When the person last put the screen away: an agent's next click must not
+  // throw it straight back at them.
+  const screenDismissed = useRef(0)
+  const showScreen = useCallback(() => {
+    screenOpenedPanel.current = !rightOpen
+    if (!rightOpen) setRightOpen(true)
+    setScreenWanted(true)
+  }, [rightOpen])
+  const hideScreen = useCallback(() => {
+    screenDismissed.current = Date.now()
+    setScreenWanted(false)
+    if (screenOpenedPanel.current) setRightOpen(false)
+    screenOpenedPanel.current = false
+  }, [])
+  const screenWantedRef = useRef(screenWanted)
+  useEffect(() => {
+    screenWantedRef.current = screenWanted
+  })
+  const desktop = useDesktopPresence(() => {
+    if (!screenWantedRef.current && Date.now() - screenDismissed.current > 120_000) showScreen()
+  })
   const [selection, setSelection] = useState('')
 
   // How the side panel is divided, and which screen that arrangement belongs
@@ -1349,6 +1381,18 @@ export function App({ auth, onSignOut }: { auth: AuthState; onSignOut: () => voi
                 <PanelRight size={15} />
               </button>
             )}
+            {!narrow && desktop.enabled && (
+              <button
+                type="button"
+                data-testid="screen-toggle"
+                onClick={() => (screenWanted && rightWidth > 0 ? hideScreen() : showScreen())}
+                aria-pressed={screenWanted && rightWidth > 0}
+                title={screenWanted && rightWidth > 0 ? t('app.hideScreen') : t('app.showScreen')}
+                className="vp-control"
+              >
+                <ScreenShare size={15} />
+              </button>
+            )}
             {/* A touchscreen that is not a phone gets the two things the
                 desktop layout assumes a keyboard and a mouse provide. */}
             {!narrow && coarsePointer && (
@@ -1824,6 +1868,8 @@ export function App({ auth, onSignOut }: { auth: AuthState; onSignOut: () => voi
           currentSession={current}
           onPaste={pasteToSession}
           previewAsk={previewAsk}
+          screenWanted={screenWanted}
+          onScreenWanted={(w) => (w ? setScreenWanted(true) : hideScreen())}
         />
       )}
 
