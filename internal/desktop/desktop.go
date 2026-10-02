@@ -404,6 +404,14 @@ func (d *Desktop) Move(by Source, x, y int) error {
 	return nil
 }
 
+// How a click is spaced; Click says why it is spaced at all. A triple click
+// still ends well inside the 250ms double-click time.
+const (
+	clickSettle = 30 * time.Millisecond
+	clickHold   = 40 * time.Millisecond
+	clickGap    = 50 * time.Millisecond
+)
+
 // Button numbers as X has them.
 const (
 	ButtonLeft   = 1
@@ -440,18 +448,27 @@ func (d *Desktop) Click(by Source, x, y int, button byte, count int) error {
 	if err := fake(conn, root, xproto.MotionNotify, 0, cx, cy); err != nil {
 		return err
 	}
+	// Spaced like a hand rather than sent in one burst. xfwm4 answers a press
+	// on a title-bar button by grabbing the pointer and waiting for the
+	// release; a release already sent before that grab exists is never seen,
+	// so the click only focused the window and the agent's second one closed
+	// it. Every agent that tried it learned "click twice". The pause after the
+	// motion is for the same race with Enter and hover, which GTK widgets
+	// process before they accept a press.
+	time.Sleep(clickSettle)
 	count = max(1, min(count, 3))
 	for i := 0; i < count; i++ {
 		if err := fake(conn, root, xproto.ButtonPress, button, cx, cy); err != nil {
 			return err
 		}
+		time.Sleep(clickHold)
 		if err := fake(conn, root, xproto.ButtonRelease, button, cx, cy); err != nil {
 			return err
 		}
 		if i < count-1 {
-			// Inside every toolkit's double-click time, outside the time some
-			// of them take two events in one millisecond as a bounce.
-			time.Sleep(40 * time.Millisecond)
+			// Inside every toolkit's double-click time (xfwm4's is 250ms),
+			// outside the time some of them take as a bounce.
+			time.Sleep(clickGap)
 		}
 	}
 	kind := "click"
@@ -498,9 +515,11 @@ func (d *Desktop) Drag(by Source, x1, y1, x2, y2 int) error {
 	if err := fake(conn, root, xproto.MotionNotify, 0, ax, ay); err != nil {
 		return err
 	}
+	time.Sleep(clickSettle) // see Click
 	if err := fake(conn, root, xproto.ButtonPress, ButtonLeft, ax, ay); err != nil {
 		return err
 	}
+	time.Sleep(clickHold)
 	// In steps rather than one jump: a toolkit that starts a drag only after
 	// the pointer has moved some pixels with the button down never sees one
 	// from a single motion event.

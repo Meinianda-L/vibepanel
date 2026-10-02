@@ -24723,3 +24723,26 @@ with an illegal instruction: Claude Code from 2.1.113 on, and every opencode
 release. Claude Code stays on 2.1.112 from npm with its auto-updater off. Under
 `qemu-x86_64-static -cpu max`, opencode starts in two minutes and idles at more
 than a core, so it is installed but not kept running.
+
+## 2026-10-02 — An agent's first click only focused the window
+
+With `deepseek-flash` able to see the screenshots, Claude Code, pi and Hermes
+each closed a window and opened a folder, and two of them reported the same
+thing: the first click on a title-bar button, or the first double-click on a
+folder, did nothing, and the second worked. Both agents concluded "click
+twice", which is the wrong lesson to leave in a model's context.
+
+The cause was ours. `Click` sent the motion, press and release back to back.
+xfwm4 answers a press on a frame button by grabbing the pointer and waiting for
+the release, and a release that reached the server before the grab was ever
+seen. Clicks are now spaced like a hand: 30 ms after the motion, a 40 ms hold,
+50 ms between the clicks of a double click, all well inside xfwm4's 250 ms
+double-click time. On the Mac mini, a single click closed a maximized window,
+a single click closed an unfocused window behind a terminal, and a single
+double-click opened a folder.
+
+The other half of that afternoon was not ours: an empty "Display" dialog sat
+over everything and swallowed clicks. xfsettingsd opens it whenever an output
+comes back, and the mini's HDMI monitor drops off whenever it sleeps. Its
+`displays /Notify` is now 0 on that machine; worth knowing for any desktop an
+agent operates unattended.
